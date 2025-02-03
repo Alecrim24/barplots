@@ -1,0 +1,454 @@
+library(DESeq2)
+library(ggplot2)
+library(dplyr)  # Loads dplyr, which provides %>% and filter()
+library(tidyverse)
+
+
+########## Hydnophytum moseleyanum features count path
+featurescountdata_path_hm <- "C:/Users/bop21gwh/Documents/PhD work/hisat/hisat2_hm.txt"
+
+meta_data_file_path_hm <- "C:/Users/bop21gwh/Documents/PhD work/genomics/Hisat2/metadata.csv"
+#gtf_annotation_new_hm
+
+# Read the data from a tab-separated text file
+countdata_features_hm <- read.table(featurescountdata_path_hm, header = TRUE, sep = "\t")
+# View the first few rows
+head(countdata_features_hm)
+print(colnames(countdata_features_hm))
+
+
+# Check count data dimensions
+cat("Count data dimensions:", dim(countdata_features_hm), "\n")
+headers_hm <- colnames(countdata_features_hm)
+print(headers_hm)
+
+# Filter out unnecessary columns
+filtered_featurecounts_hm <- countdata_features_hm[, -c(2:8)]  # Remove columns 2 to 6
+rownames(filtered_featurecounts_hm) <- filtered_featurecounts_hm$Geneid
+# check the column names to match the metadata
+print(colnames(filtered_featurecounts_hm))
+
+######################
+
+
+################## metadata processing ##################
+library(readr)
+# Load metadata
+meta_data_new_hm <- read.csv(meta_data_file_path_hm)
+print(colnames(meta_data_new_hm))
+head(meta_data_new_hm)
+
+
+filtered_meta_data_h.m <- meta_data_new_hm[meta_data_new_hm$Species == "H.m", ]
+
+
+print(filtered_meta_data_h.m)
+
+# Extract sample names from metadata_filtered
+metadata_samples_hm <- filtered_meta_data_h.m$Sample
+print(metadata_samples_hm)
+
+# Extract column names from countdata_mb_filtered (excluding the 'Geneid' column)
+countdata_hm_features <- colnames(filtered_featurecounts_hm)[-1]
+print(countdata_hm_features)
+
+################## Hydnophytum moseleyanum
+
+############################ dds now
+
+# Ensure all columns in countdata_mb_filtered are present in metadata_filtered$Sample
+countdata_filtered_features_hm <- filtered_featurecounts_hm[, match(metadata_samples_hm, countdata_hm_features) + 1]
+
+# Set row names to the gene IDs from the first column of countdata_mb_filtered
+rownames(filtered_featurecounts_hm) <- filtered_featurecounts_hm$Geneid
+print(countdata_filtered_features_hm)
+
+
+# Create DESeq2 dataset
+dds_hm <- DESeqDataSetFromMatrix(
+  countData = round(countdata_filtered_features_hm),
+  colData = filtered_meta_data_h.m,
+  design = ~ Tissue # Adjust 'Condition' to the appropriate variable from your metadata
+)
+
+dds_2_hm <- DESeq(dds_hm)
+print(dds_2_hm)
+
+ntd_hm <- vst(dds_2_hm, blind = FALSE)
+########################################## works
+
+hm_gtf_file <-"C:/Users/bop21gwh/Documents/PhD work/hisat/output_directory.tsv"
+
+head(hm_gtf_file)
+
+interpro_data_hm <- read_tsv(hm_gtf_file)
+
+####### code for searching gene functions in the gtf
+
+# Assign column names (adjust these as necessary to match your data structure)
+colnames(interpro_data_hm) <- c("Protein_ID", "MD5sum", "Length", "Database", "Database_Acc", 
+                                "Description", "Start", "End", "E-value", "Status", "Date", 
+                                "InterPro_ID", "InterPro_Desc", "GO_Terms", "Pathways")
+
+# View the data to ensure it loaded correctly
+head(interpro_data_hm)
+
+# Filter for rows containing the terms "C-terminal (heme d1) domain of cytochrome cd1-nitrite reductase, Nitrite, Nitrate, Ammonium,ammonium, urease, urea, amino acid"
+
+
+# Define keywords to search for
+
+keywords <- c("High-affinity nitrate","nitrite","Ammonium", "urea")
+
+
+# Filter rows where the Description or InterPro_Desc column contains any of the keywords
+filtered_data <- interpro_data_hm %>% 
+  filter(grepl(paste(keywords, collapse = "|"), Description, ignore.case = TRUE) | 
+           grepl(paste(keywords, collapse = "|"), InterPro_Desc, ignore.case = TRUE))
+
+# View the filtered data
+head(filtered_data$Description)
+head(filtered_data$Protein_ID)
+
+head(filtered_data$InterPro_Desc)
+########################
+
+# Create a dataframe with Gene Names and Descriptions
+gene_description_data <- filtered_data %>% 
+  select(Protein_ID, Description) %>% 
+  rename(Gene_Name = Protein_ID, Gene_Description = Description)
+
+# Remove ".1" or similar suffix from Gene_Name
+gene_description_data$Gene_Name <- gsub("\\.\\d+$", "", gene_description_data$Gene_Name)
+
+# View the first few rows of the cleaned dataframe
+head(gene_description_data)
+
+# Remove duplicates based on Gene_Name and keep the first occurrence
+gene_description_data_no_duplicates <- gene_description_data %>%
+  distinct(Gene_Name, .keep_all = TRUE)
+
+# View the cleaned data
+head(gene_description_data_no_duplicates)
+
+
+#######
+
+
+##############
+
+# use gene_description_data_no_duplicates instead of gene_description_data
+
+#get the mb version from the other r tab
+
+samples_mixed <- c(
+  "X2.2.H_m.No.ants.P1.Warty_CCAACTGTAT.GCGCTAGAGA_L007.hisat.sorted.bam",
+  "X6.6.H_m.No.ants.P2.Warty_ATTCGCACTA.TCTGTATGGT_L007.hisat.sorted.bam",
+  "X10.10.H_m.No.ants.P3.Warty_TGTGACGTAT.GCAGCGTTAG_L007.hisat.sorted.bam",
+  
+  "X3.3.H_m.No.ants.P1.Smooth_GAGTAGTGAC.GCGATGCCAA_L007.hisat.sorted.bam",
+  "X7.7.H_m.No.ants.P2.Smooth_CTCTTCAGCA.TTGTCTCTAC_L007.hisat.sorted.bam",
+  "X11.11.H_m.No.ants.P3.Smooth_AGAAGATTGG.AGAAGGTACT_L007.hisat.sorted.bam",
+  
+  "X1.1.H_m.No.ants.P1.Tuber_TAGCGAGGCT.TTGCTCACGG_L007.hisat.sorted.bam",
+  "X5.5.H_m.No.ants.P2.Tuber_ATCATACCGC.ATGTCGTACT_L007.hisat.sorted.bam",
+  "X9.9.H_m.No.ants.P3.Tuber_TCTGACTATG.TAACCAGATC_L007.hisat.sorted.bam",
+  
+  "X74.76.H_m.Control_ants.P1.Warty_ATCTAACCTG.CCTGTGGTTC_L007.hisat.sorted.bam",
+  "X86.80.H_m.Control_ants.P2.Warty_AGCACCAGTC.CTCGTGTAGC_L007.hisat.sorted.bam",
+  "X87.84.H_m.Control_ants.P3.Warty_TACCTAGACT.GCATTCGAAT_L007.hisat.sorted.bam",
+  
+  "X75.77.H_m.Control_ants.P1.Smooth_GCGACAATAT.ATTCGTACGG_L007.hisat.sorted.bam",
+  "X79.81.H_m.Control_ants.P2.Smooth_TCCGAGATGC.TGTCACCTTA_L007.hisat.sorted.bam",
+  "X83.85.H_m.Control_ants.P3.Smooth_AATCGTGCGG.GTTCAGTAGA_L007.hisat.sorted.bam",
+  
+  "X73.75.H_m.Control_ants.P1.Tuber_CGCACATTAC.TGGAACGTAG_L007.hisat.sorted.bam",
+  "X77.79.H_m.Control_ants.P2.Tuber_GATCCACTTA.GTGTTCTGTT_L007.hisat.sorted.bam",
+  "X81.83.H_m.Control_ants.P3.Tuber_GCATTCCTTC.GAGCCTGCTT_L007.hisat.sorted.bam"
+)
+
+
+
+
+######## this code uses descriptions
+
+# Step 1: Create a mapping from Gene_Name to Gene_Description
+gene_to_description_hm <- setNames(gene_description_data_no_duplicates$Gene_Description, gene_description_data_no_duplicates$Gene_Name)
+print(gene_to_description_hm)
+
+#####
+# Combine Gene_Name and Gene_Description into a single string
+gene_to_description_hm <- setNames(
+  paste(gene_description_data_no_duplicates$Gene_Name, 
+        gene_description_data_no_duplicates$Gene_Description, 
+        sep = " - "), 
+  gene_description_data_no_duplicates$Gene_Name
+)
+
+# Display the first few entries
+head(gene_to_description_hm)
+
+
+#####
+# Ensure selected_samples is correctly defined
+selected_samples <- samples_mixed  # Use your custom list of sample names here
+
+# Step 2: Subset and reorder the DESeqDataSet based on selected_samples
+dds_filtered_hm <- dds_2_hm[, colnames(dds_2_hm) %in% selected_samples]
+dds_filtered_hm <- dds_filtered_hm[, match(selected_samples, colnames(dds_filtered_hm))]
+
+# Verify the new order to confirm it matches selected_samples
+print(colnames(dds_filtered_hm))
+
+# Step 3: Extract normalised counts from the filtered DESeqDataSet
+norm_counts_hm <- counts(dds_filtered_hm, normalized = TRUE)
+
+print(norm_counts_hm)
+
+# Step 4: Select only nitrogen-related genes
+nitrogen_genes <- gene_description_data$Gene_Name  # Assuming gene names are used for rownames
+print(nitrogen_genes)
+print(length(nitrogen_genes))
+# Remove duplicates from nitrogen_genes
+unique_nitrogen_genes <- unique(nitrogen_genes)
+
+# Count the number of unique genes
+length(unique_nitrogen_genes)
+
+nitrogen_counts <- norm_counts_hm[rownames(norm_counts_hm) %in% nitrogen_genes, , drop = FALSE]
+
+# Log-transform counts for better visualisation
+log_counts <- log2(nitrogen_counts + 1)
+
+# Step 5: Replace rownames in log_counts with corresponding descriptions
+rownames(log_counts) <- gene_to_description_hm[rownames(log_counts)]
+
+# Step 6: Create metadata for heatmap labels
+df_filt_hm <- as.data.frame(colData(dds_filtered_hm)[, c("Plant", "Tissue")])
+
+# Combine Plant and Tissue for custom labels
+custom_labels <- paste(df_filt_hm$Tissue, df_filt_hm$Plant, sep = "_")
+names(custom_labels) <- rownames(df_filt_hm)
+final_labels <- custom_labels[colnames(log_counts)]
+
+########################################
+
+# Step 7: Compute the mean and standard deviation for each nitrogen-related gene across the selected samples
+mean_counts <- rowMeans(log_counts)
+sd_counts <- apply(log_counts, 1, sd)
+
+# Step 8: Prepare data for plotting
+plot_data <- data.frame(
+  Gene = rownames(log_counts),
+  Mean = mean_counts,
+  SD = sd_counts
+)
+
+length(rownames(log_counts))
+
+# Step 9: Create a bar plot with error bars using ggplot2
+library(ggplot2)
+
+
+
+
+ggplot(plot_data, aes(x = Gene, y = Mean)) +
+  geom_bar(stat = "identity", position = "dodge", fill = "skyblue") +
+  geom_errorbar(aes(ymin = Mean - SD, ymax = Mean + SD), width = 0.2) +
+  theme(axis.text.x = element_text(angle = 180, hjust = 2)) +
+  labs(x = "Gene", y = "Log2 Normalised Counts") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 8), axis.title = element_text(size = 10))
+
+
+library(ggplot2)
+
+ggplot(plot_data, aes(x = reorder(Gene, Mean), y = Mean)) +
+  geom_bar(stat = "identity", position = "dodge", fill = "skyblue") +
+  geom_errorbar(aes(ymin = Mean - SD, ymax = Mean + SD), width = 0.2) +
+  coord_flip() +  # Flips the coordinates
+  labs(x = "Gene", y = "Log2 Normalised Counts") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 8), axis.title = element_text(size = 10))
+
+
+##########
+library(ggplot2)
+
+# Ensure plot_data includes tissues
+# Assuming your `log_counts` matrix columns correspond to tissues
+tissue_data <- colData(dds_filtered_hm)$Tissue
+plot_data_tissue <- as.data.frame(log_counts)
+plot_data_tissue$Gene <- rownames(log_counts)
+plot_data_tissue <- tidyr::gather(plot_data_tissue, Tissue, Expression, -Gene)  # Long format
+
+# Plot with tissues as a fill aesthetic
+ggplot(plot_data_tissue, aes(x = reorder(Gene, Expression), y = Expression, fill = Tissue)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  coord_flip() +
+  labs(x = "Gene", y = "Log2 Normalised Counts", fill = "Tissue") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 8), axis.title = element_text(size = 10))
+
+#create averages of tissues from log counts
+print(colnames(log_counts))
+head(log_counts)
+
+library(dplyr)
+
+# Define sample-to-tissue mapping
+sample_to_tissue <- c(
+  "H.m_No_ants_warty" = c("X2.2.H_m.No.ants.P1.Warty_CCAACTGTAT.GCGCTAGAGA_L007.hisat.sorted.bam",        
+                          "X6.6.H_m.No.ants.P2.Warty_ATTCGCACTA.TCTGTATGGT_L007.hisat.sorted.bam",        
+                          "X10.10.H_m.No.ants.P3.Warty_TGTGACGTAT.GCAGCGTTAG_L007.hisat.sorted.bam"),
+  "H.m_No_ants_smooth" = c("X3.3.H_m.No.ants.P1.Smooth_GAGTAGTGAC.GCGATGCCAA_L007.hisat.sorted.bam",       
+                           "X7.7.H_m.No.ants.P2.Smooth_CTCTTCAGCA.TTGTCTCTAC_L007.hisat.sorted.bam",       
+                           "X11.11.H_m.No.ants.P3.Smooth_AGAAGATTGG.AGAAGGTACT_L007.hisat.sorted.bam"),
+  "H.m_No_ants_tuber" = c("X1.1.H_m.No.ants.P1.Tuber_TAGCGAGGCT.TTGCTCACGG_L007.hisat.sorted.bam",        
+                          "X5.5.H_m.No.ants.P2.Tuber_ATCATACCGC.ATGTCGTACT_L007.hisat.sorted.bam",        
+                          "X9.9.H_m.No.ants.P3.Tuber_TCTGACTATG.TAACCAGATC_L007.hisat.sorted.bam"),
+  "H.m_ants_warty" = c("X74.76.H_m.Control_ants.P1.Warty_ATCTAACCTG.CCTGTGGTTC_L007.hisat.sorted.bam", 
+                       "X86.80.H_m.Control_ants.P2.Warty_AGCACCAGTC.CTCGTGTAGC_L007.hisat.sorted.bam", 
+                       "X87.84.H_m.Control_ants.P3.Warty_TACCTAGACT.GCATTCGAAT_L007.hisat.sorted.bam"),
+  "H.m_ants_smooth" = c("X75.77.H_m.Control_ants.P1.Smooth_GCGACAATAT.ATTCGTACGG_L007.hisat.sorted.bam",
+                        "X79.81.H_m.Control_ants.P2.Smooth_TCCGAGATGC.TGTCACCTTA_L007.hisat.sorted.bam",
+                        "X83.85.H_m.Control_ants.P3.Smooth_AATCGTGCGG.GTTCAGTAGA_L007.hisat.sorted.bam"),
+  "H.m_ants_tuber" = c("X73.75.H_m.Control_ants.P1.Tuber_CGCACATTAC.TGGAACGTAG_L007.hisat.sorted.bam", 
+                       "X77.79.H_m.Control_ants.P2.Tuber_GATCCACTTA.GTGTTCTGTT_L007.hisat.sorted.bam", 
+                       "X81.83.H_m.Control_ants.P3.Tuber_GCATTCCTTC.GAGCCTGCTT_L007.hisat.sorted.bam")
+)
+
+# Create a mapping of sample names to tissue types
+sample_tissue_map <- unlist(lapply(names(sample_to_tissue), function(tissue) {
+  setNames(rep(tissue, length(sample_to_tissue[[tissue]])), sample_to_tissue[[tissue]])
+}))
+
+print(tissue)
+# Subset the mapping to include only samples present in the data
+sample_tissue_map <- sample_tissue_map[names(sample_tissue_map) %in% colnames(log_counts)]
+
+print(colnames(sample_tissue_map))
+
+library(dplyr)
+
+# Ensure log_counts is a data frame
+log_counts_df <- as.data.frame(log_counts)
+print(log_counts_df)
+# Compute mean expression per tissue
+tissue_avg_expression <- log_counts_df %>%
+  select(names(sample_tissue_map)) %>%
+  t() %>%
+  as.data.frame() %>%
+  mutate(Tissue = sample_tissue_map[rownames(.)]) %>%
+  group_by(Tissue) %>%
+  summarise(across(everything(), mean))
+
+print(log_counts_df)
+# Convert back to gene names as row names
+rownames(tissue_avg_expression) <- tissue_avg_expression$Tissue
+tissue_avg_expression <- tissue_avg_expression[, -1]  # Remove the 'Tissue' column
+
+# Print the averaged expression matrix
+print(tissue_avg_expression)
+print(colnames(tissue_avg_expression))
+
+dim(log_counts)  # Shows the number of genes (rows) and samples (columns)
+colnames(log_counts)
+
+#######################
+
+############
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(stringr)
+
+# Extract tissue information
+tissue_data <- colData(dds_filtered_hm)$Tissue
+
+# Convert log_counts to a data frame
+plot_data_tissue <- as.data.frame(log_counts)
+plot_data_tissue$Gene <- rownames(log_counts)
+
+# Extract functional categories
+plot_data_tissue <- plot_data_tissue %>%
+  mutate(Category = str_extract(Gene, "(?<= - ).*"))  # Extract text after " - "
+
+# Convert to long format
+plot_data_tissue <- plot_data_tissue %>%
+  pivot_longer(cols = -c(Gene, Category), names_to = "Sample", values_to = "Expression")
+
+# Ensure tissue mapping
+plot_data_tissue <- plot_data_tissue %>%
+  mutate(Tissue = tissue_data[match(Sample, colnames(log_counts))])
+
+# Compute mean, standard error, and count per tissue for the selected gene
+selected_gene <- "Ammonium Transporter Family"
+selected_gene <- c("Nitrite/Sulfite reductase N-terminal domain-like", "Nitrite/Sulfite reductase ferredoxin-like half domain")
+
+
+filtered_data <- plot_data_tissue %>%
+  filter(Category == selected_gene) %>%
+  group_by(Gene, Tissue) %>%
+  summarise(
+    Mean_Expression = mean(Expression, na.rm = TRUE),
+    SEM = sd(Expression, na.rm = TRUE) / sqrt(n()),  # Standard error of the mean
+    .groups = "drop"
+  )
+
+# Generate the plot with error bars but with gene title name
+ggplot(filtered_data, aes(x = Tissue, y = Mean_Expression, fill = Tissue)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.8) +
+  geom_errorbar(aes(ymin = Mean_Expression - SEM, ymax = Mean_Expression + SEM), 
+                width = 0.2, position = position_dodge(0.9)) +
+  facet_wrap(~Gene, scales = "free_y") +  # Separate facets for each gene
+  labs(title = selected_gene, x = "Tissue", y = "Log2 Normalised Counts", fill = "Tissue") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), 
+        axis.title = element_text(size = 10),
+        legend.position = "none")  # Hide redundant legend
+
+ggplot(filtered_data, aes(x = Tissue, y = Mean_Expression, fill = Tissue)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.8) +
+  geom_errorbar(aes(ymin = Mean_Expression - SEM, ymax = Mean_Expression + SEM), 
+                width = 0.2, position = position_dodge(0.9)) +
+  facet_wrap(~Gene, scales = "free_y") +  # Separate facets for each gene
+  labs(title = "H.m", x = "Tissue", y = "Log2 Normalised Counts", fill = "Tissue") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), 
+        axis.title = element_text(size = 10),
+        legend.position = "none")  # Hide redundant legend
+##############
+
+
+# Define the genes you're interested in
+selected_genes <- c("Ammonium Transporter Family")
+
+# Filter the data for the selected genes
+filtered_data <- plot_data_tissue %>%
+  filter(Category %in% selected_genes) %>%
+  group_by(Gene, Tissue) %>%
+  summarise(
+    Mean_Expression = mean(Expression, na.rm = TRUE),
+    SEM = sd(Expression, na.rm = TRUE) / sqrt(n()),  # Standard error of the mean
+    .groups = "drop"
+  )
+
+# Create the ggplot
+ggplot(filtered_data, aes(x = Tissue, y = Mean_Expression, fill = Tissue)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.8) +
+  geom_errorbar(aes(ymin = Mean_Expression - SEM, ymax = Mean_Expression + SEM), 
+                width = 0.2, position = position_dodge(0.9)) +
+  facet_wrap(~Gene, scales = "free_y") +  # Separate facets for each gene
+  labs(title = "Gene Expression in Various Tissues", x = "Tissue", y = "Log2 Normalised Counts", fill = "Tissue") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), 
+        axis.title = element_text(size = 10),
+        legend.position = "none")  # Hide redundant legend
+
+
+
+
+
+
+
