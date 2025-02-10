@@ -1,0 +1,268 @@
+# DDs object
+# Paths
+featurescountdata_path_Mb <- "C:/Users/bop21gwh/Documents/PhD work/hisat/featurescount_mb_with_M.b.gff.txt"
+meta_data_file_path_mb <- "C:/Users/bop21gwh/Documents/PhD work/genomics/Hisat2/metadata.csv"
+mb_gtf_file <- "C:/Users/bop21gwh/Documents/PhD work/hisat/output_file_m.b.tsv"
+
+# Libraries
+library(DESeq2)
+library(readr)
+library(dplyr)
+
+# Step 1: Load feature counts data
+countdata_features_mb <- read.table(featurescountdata_path_Mb, header = TRUE, sep = "\t")
+cat("Count data dimensions:", dim(countdata_features_mb), "\n")
+print(colnames(countdata_features_mb))
+filtered_featurecounts_mb <- countdata_features_mb[, -c(2:6)]
+rownames(filtered_featurecounts_mb) <- filtered_featurecounts_mb$Geneid
+
+# Step 2: Load metadata
+meta_data_new_mb <- read.csv(meta_data_file_path_mb)
+filtered_meta_data_mb <- meta_data_new_mb[meta_data_new_mb$Species == "M.b", ]
+metadata_samples_mb <- filtered_meta_data_mb$Sample
+
+# Ensure alignment between metadata and count data
+countdata_mb_features <- colnames(filtered_featurecounts_mb)[-1]
+# insert code for 
+colnames(filtered_featurecounts_mb) <- gsub("^X\\.nobackup\\.qkdf72\\.hisat2\\.m\\.b_results\\.", "", colnames(filtered_featurecounts_mb))
+colnames(filtered_featurecounts_mb)[-1] <- paste0("X", colnames(filtered_featurecounts_mb)[-1])
+
+# extract colnames
+countdata_mb_features <- colnames(filtered_featurecounts_mb)[-1]
+print(countdata_mb_features)
+
+countdata_filtered_features_mb <- filtered_featurecounts_mb[, match(metadata_samples_mb, countdata_mb_features) + 1]
+rownames(countdata_filtered_features_mb) <- filtered_featurecounts_mb$Geneid
+
+
+# Step 3: Create DESeq2 dataset
+dds_mb <- DESeqDataSetFromMatrix(
+  countData = round(countdata_filtered_features_mb),
+  colData = filtered_meta_data_mb,
+  design = ~ Tissue
+)
+dds_2_mb <- DESeq(dds_mb)
+
+print(dds_2_mb)
+# Set the file path for the InterPro data
+interpro_data_mb_path <- "C:/Users/bop21gwh/Documents/PhD work/hisat/output_file_m.b.tsv"
+
+# Read the InterPro data from a tab-separated file
+interpro_data_mb <- read_tsv(interpro_data_mb_path)
+head(interpro_data_mb)
+
+# Load GTF data and search for specific gene functions
+interpro_data_mb <- read_tsv(mb_gtf_file, col_names = FALSE)
+colnames(interpro_data_mb) <- c("Gene", "MD5sum", "Length", "Database", "Database_Acc", 
+                                "Description", "Start", "End", "E-value", "Status", "Date", 
+                                "InterPro_ID", "InterPro_Desc", "GO_Terms", "Pathways")
+
+head(interpro_data_mb)
+
+
+interpro_df <- as.data.frame(interpro_data_mb)
+View(interpro_df)
+
+
+#Isolate the genes (from heatmaps) as a variable
+
+
+######
+# Define the list of genes
+genes <- c("_ptg000028l_000789.1", "_ptg000004l_000888.1", 
+           "_ptg000013l_001037.1", "_ptg000035l_000039.1")
+
+# Filter the dataset to only include the selected genes
+filtered_data <- interpro_data_mb[interpro_data_mb$Gene %in% genes, c("Gene", "Description")]
+
+# Remove the '.1' from gene_name
+filtered_data$Gene <- sub("\\.1$", "", filtered_data$Gene)
+
+# Create a named vector mapping Gene_Name to Gene_Description
+gene_mapping <- setNames(filtered_data$Description, filtered_data$Gene)
+
+# Print the result
+print(filtered_data)
+
+View(as.data.frame(colData(dds_mb)))
+
+# Define the list of tissue samples you're interested in
+samples_fert_mb <- c(
+  "X45.47.M_b.Fertilizer.P1.Control_cavity_warty_AGACGACAGA.GAGCTGGAAT_L007.hisat.sorted.bam",
+  "X52.54.M_b.Fertilizer.P2.Control_cavity_warty_ACTCGTCCAG.TGGTCCTCGT_L007.hisat.sorted.bam",
+  "X59.61.M_b.Fertilizer.P3.Control_cavity_warty_CTCTCTCTAG.ACTTGATTGG_L007.hisat.sorted.bam",
+  
+  "X46.48.M_b.Fertilizer.P1.Control_cavity_smooth_TAGGTCCAGA.TGCTCATCCG_L007.hisat.sorted.bam",
+  "X53.55.M_b.Fertilizer.P2.Control_cavity_smooth_TCCGGAGAAC.ATTCCTCTGG_L007.hisat.sorted.bam",
+  "X60.62.M_b.Fertilizer.P3.Control_cavity_smooth_AAGGCTCCAT.TGAAGATGGA_L007.hisat.sorted.bam",
+  
+  "X44.46.M_b.Fertilizer.P1.Control_cavity_tuber_TCAGCTGTCA.ACAGCTCCTG_L007.hisat.sorted.bam",
+  "X51.53.M_b.Fertilizer.P2.Control_cavity_tuber_CAACTACCGC.ATGCTGCAGG_L007.hisat.sorted.bam",
+  "X58.60.M_b.Fertilizer.P3.Control_cavity_tuber_CGGATCATTA.CCGTAACCTT_L007.hisat.sorted.bam",
+  
+  "X42.44.M_b.Fertilizer.P1.Fertilzer_cavity_warty_TCGCTGAGAG.AATGCTCTAG_L007.hisat.sorted.bam",
+  "X49.51.M_b.Fertilizer.P2.Fertilzer_cavity_warty_CTTGTTACTG.AATTCGGTGG_L007.hisat.sorted.bam",
+  "X56.58.M_b.Fertilizer.P3.Fertilzer_cavity_warty_ATACACACCT.AGTGTGATAG_L007.hisat.sorted.bam",
+  
+  "X43.45.M_b.Fertilizer.P1.Fertilzer_cavity_smooth_CGCTAATTGC.CCATCGCATT_L007.hisat.sorted.bam",
+  "X50.52.M_b.Fertilizer.P2.Fertilzer_cavity_smooth_TCACCGTGGT.TCGCTCTGCT_L007.hisat.sorted.bam",
+  "X57.59.M_b.Fertilizer.P3.Fertilzer_cavity_smooth_AGCCTCTGCT.TTCGCCTTAG_L007.hisat.sorted.bam",
+  
+  "X41.43.M_b.Fertilizer.P1.Fertilzer_cavity_tuber_CCTACTCTGC.TGCAATTGGC_L007.hisat.sorted.bam",
+  "X48.50.M_b.Fertilizer.P2.Fertilzer_cavity_tuber_GATAGGTGAA.AGACGCAAGA_L007.hisat.sorted.bam",
+  "X55.57.M_b.Fertilizer.P3.Fertilzer_cavity_tuber_CCGAAGGTTC.TCTATCTGAC_L007.hisat.sorted.bam"
+)
+
+
+
+counts_mb <- counts(dds_2_mb, normalized = TRUE)
+
+View(as.data.frame(counts_mb, normalized = TRUE))
+
+
+
+# Extract normalized counts from the filtered DESeqDataSet
+norm_counts_mb <- counts(dds_filtered_mb, normalized = TRUE)
+head(norm_counts_mb)
+
+# 
+# Define the list of genes
+ammonium_genes <- c("_ptg000028l_000789.1", "_ptg000004l_000888.1", 
+           "_ptg000013l_001037.1", "_ptg000035l_000039.1")
+head(ammonium_genes)
+
+### make gene_to_description_mb
+# Select rows where Protein_ID matches the ammonium_genes
+ammonium_gene_data <- interpro_data_mb[interpro_data_mb$Gene %in% ammonium_genes, ]
+print(ammonium_gene_data$Gene)
+###
+# Remove the .1 suffix
+ammonium_gene_data$Gene <- gsub("\\.1$", "", ammonium_gene_data$Gene)
+
+# Remove duplicates
+ammonium_gene_data <- ammonium_gene_data[!duplicated(ammonium_gene_data$Gene), ]
+
+# Print unique values
+print(ammonium_gene_data)
+# only Gene and Description
+ammonium_gene_info <- ammonium_gene_data[, c("Gene", "Description")]
+
+# Print the new variable
+print(ammonium_gene_info)
+head(filtered_data)
+#####
+# Create a mapping from Gene_Name to Gene_Description
+gene_description_mybec <- setNames(
+  paste(ammonium_gene_info$Gene, 
+        ammonium_gene_info$Description, 
+        sep = " - "), 
+  ammonium_gene_info$Gene
+)
+print(gene_description_mybec)
+counts_mb <- counts(dds_2_mb, normalized = TRUE)
+#### general notes below
+head(gene_to_description_mb)
+###################
+# Define the gene list (removing description part)
+ammonium_genes <- c("_ptg000004l_000888", "_ptg000028l_000789", 
+                    "_ptg000035l_000039", "_ptg000013l_001037")
+
+# Extract the rows corresponding to these genes from the normalized count matrix
+ammonium_gene_counts <- counts_mb[rownames(counts_mb) %in% ammonium_genes, ]
+
+# View the extracted data
+print(ammonium_gene_counts)  # or use View(ammonium_gene_counts) in RStudio
+
+
+
+
+# Log-transform counts for better visualisation
+log_counts_mb <- log2(ammonium_gene_counts + 1)
+
+head(log_counts_mb)
+dim(log_counts_mb)  # Opens it in RStudio’s data viewer (if using RStudio)
+
+h
+
+##############
+
+
+
+####sfedew
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Assuming samples_fert_mb is your predefined vector for Tissue order
+samples_fert_mb <- c("Mb_Control_Smooth","Mb_Control_Tuber","Mb_Control_Warty", 
+                     "Mb_Fertilizer_Smooth", "Mb_Fertilizer_Tuber", "Mb_Fertilizer_Warty")
+
+# Step 1: Extract ammonium gene expression data
+ammonium_expression_data <- log_counts_mb[rownames(log_counts_mb) %in% names(gene_description_mybec), ]
+ammonium_expression_data <- as.data.frame(ammonium_expression_data)
+ammonium_expression_data$Gene <- rownames(ammonium_expression_data)
+
+# Step 2: Reshape to long format
+ammonium_long <- pivot_longer(ammonium_expression_data, 
+                              cols = -Gene, 
+                              names_to = "Sample", 
+                              values_to = "Expression")
+
+# Step 3: Map samples to tissues
+# Change samples to merge for tissues
+sample_tissue_map <- pivot_longer(samples_to_merge, cols = everything(), names_to = "Tissue", values_to = "Sample")
+
+# Filter ammonium_long to keep only mapped samples
+ammonium_long <- ammonium_long %>% filter(Sample %in% sample_tissue_map$Sample)
+
+# Merge tissue mapping
+ammonium_long <- left_join(ammonium_long, sample_tissue_map, by = "Sample")
+View(ammonium_long)
+
+# Step 4: Compute mean and standard error
+ammonium_mean_se_df <- ammonium_long %>%
+  group_by(Gene, Tissue) %>%
+  summarise(
+    Mean = mean(Expression, na.rm = TRUE),
+    SE = sd(Expression, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  ungroup()
+
+# Ensure Tissue is a factor with the correct order
+ammonium_mean_se_df$Tissue <- factor(ammonium_mean_se_df$Tissue, levels = samples_fert_mb)
+# Add Description column by merging with ammonium_gene_info
+ammonium_mean_se_df <- left_join(ammonium_mean_se_df, ammonium_gene_info, by = "Gene")
+library(dplyr)
+
+ammonium_mean_se_df <- ammonium_mean_se_df %>%
+  mutate(Description = case_when(
+    Gene == "_ptg000004l_000888" ~ "Ammonium-transporter",
+    Gene == "_ptg000013l_001037" ~ "Ammonium-Transporter Family",
+    TRUE ~ Description  # Keep other descriptions unchanged
+  ))
+
+print(ammonium_mean_se_df)
+
+# View updated dataframe
+View(ammonium_mean_se_df)
+
+View(ammonium_mean_se_df)
+
+
+print(ammonium_mean_se_df)
+# Step 5: Generate separate plots for each gene with ordered tissues
+ggplot(ammonium_mean_se_df, aes(x = Tissue, y = Mean, fill = Tissue)) +
+  geom_bar(stat = "identity", position = position_dodge(), color = "black") +  
+  geom_errorbar(aes(ymin = Mean - SE, ymax = Mean + SE), 
+                width = 0.2, position = position_dodge(0.9)) +  
+  facet_wrap(~Description, scales = "free_y") +  # Separate plots for each gene
+  labs(title = "Ammonium Gene Expression per Tissue", 
+       x = "Tissue", 
+       y = "Expression Level (Mean ± SE)") +
+  theme_minimal() +  
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  
+  scale_fill_brewer(palette = "Set3")
+
+
+
+
